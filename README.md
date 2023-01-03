@@ -19,6 +19,8 @@ However, this method has several flaws - such as Palette swaps, so are only suit
 Police Quest 1
 --------------
 
+![Police Quest 1 by Sierra](PoliceQuest1/PoliceQuest1.png)
+
 Palette is replaced with the [EGA COM Extended](https://lospec.com/palette-list/ega-com-extended) Palette. Additional options are to add per colour diagonal lines and/or noise on top.
 
 Instructions:
