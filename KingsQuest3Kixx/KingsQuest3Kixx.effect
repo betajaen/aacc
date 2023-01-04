@@ -1,0 +1,329 @@
+uniform float4x4 ViewProj<
+	bool automatic = true;
+>;
+uniform float4 ViewSize<
+	bool automatic = true;
+>;
+uniform texture2d InputA<
+	bool automatic = true;
+>;
+
+uniform float noise_mod<
+    bool visible = true;
+	string name = "Noise Modifier";
+	string mode = "slider";
+	float minimum = 0.0;
+	float maximum = 1.0;
+	float step = 0.005;
+> = 0.125;
+
+uniform float pattern_scale<
+    bool visible = true;
+	string name = "Pattern Scale";
+	string mode = "slider";
+	float minimum = 0.01;
+	float maximum = 10.0;
+	float step = 0.005;
+> = 2.12;
+
+uniform float tint<
+    bool visible = true;
+	string name = "Tint Modifier";
+	string mode = "slider";
+	float minimum = 1.0;
+	float maximum = 1024;
+	float step = 1.0;
+> = 270.0f;
+
+sampler_state def_sampler {
+	AddressU  = Clamp;
+	AddressV  = Clamp;
+	Filter    = Point;
+};
+
+struct VertFragData {
+	float4 pos : POSITION;
+	float2 uv  : TEXCOORD0;
+};
+
+VertFragData VSDefault(VertFragData vtx) {
+	vtx.pos = mul(float4(vtx.pos.xyz, 1.0), ViewProj);
+	return vtx;
+}
+
+/*    FRAGMENT SHADER    */
+
+#define TC tint
+#define AGA(R,G,B)      float3(R / 255.0f, G / 255.0f, B / 255.0f)
+#define TINT(R,G,B)     float3(R / TC, G / TC, B / TC)
+#define ECS(R,G,B)      float3(R / 15.0, G / 15.0, B / 15.0)
+
+#define KQ3_ASPECT float2(320.0 / 200.0, 1)
+
+// EGA-COM https://lospec.com/palette-list/ega-com-extended
+#define eBLACK          AGA(25,25,25)       // Black         41	41	41	292929 changed to 191919
+#define eGRAY1          AGA(82,87,92)       // Gray 1        82	87	92	52575c
+#define eGRAY2          AGA(148,153,158)    // Gray 2        148	153	158	94999e
+#define eWHITE          AGA(222,238,222)    // White         222	238	220	deeedc
+#define eDARK_BLUE      AGA(44,66,103)      // Dark Blue     44	66	103	2c4267
+#define eLIGHT_BLUE     AGA(56,102,139)     // Light Blue    56	102	139	38668b
+#define eDARK_GREEN     AGA(83,138,106)     // Dark Green    83	138	106	538a6a
+#define eLIGHT_GREEN    AGA(99,180,101)     // Light Blue    99	180	101	63b465
+#define eEXTRA_GREEN    AGA(57,110,84)      // Extra Green   87	110	84	576e54
+#define eDARK_CYAN      AGA(100,175,175)    // Dark Cyan     100 175 175  (64AFAF)
+#define eCYAN           AGA(130,232,232)    // Cyan          130 232 232	82e8e8
+#define eDARK_RED       AGA(123,45,47)      // Dark Red      123	45	47	7b2d2f
+#define eRED            AGA(208,64,67)      // Red           208	64	67	d04043
+#define eDARK_YELLOW    AGA(203,143,33)     // Dark Yellow   203	143	33	cb8f21
+#define eYELLOW         AGA(230,196,57)     // Yellow        230	196	57	e6c439
+#define eEXTRA_YELLOW   AGA(244,166,108)    // Extra Yellow  244	166	108	f4a66c
+#define eDARK_BROWN     AGA(108,75,55)      // Dark Brown    108	75	55	6c4b37
+#define eBROWN          AGA(140,105,70)     // Brown         140	105	70	8c6946
+#define eDARK_MAGENTA   AGA(119,87,128)     // Dark Magenta  119	87	128	775780
+#define eMAGENTA        AGA(157,68,106)     // Magenta       157	68	106	9d446a
+#define ePINK           AGA(235,114,114)    // Pink          235	114	114	eb7272
+
+// Kings Quest 3 (Kixx) for Commodore Amiga Palette
+#define oBLACK ECS(0, 0, 0)
+#define oDARK_BLUE ECS(0, 0, 11)
+#define oDARK_GREEN ECS(0, 11, 0)
+#define oDARK_CYAN   ECS(0, 11, 11)
+#define oDARK_RED ECS(11, 0, 0)
+#define oDARK_MAGENTA ECS(11, 0, 11)
+#define oDARK_YELLOW ECS(12, 7, 0)
+#define oGRAY2      ECS(11, 11, 11)
+#define oGRAY1    ECS(7, 7, 7)
+#define oLIGHT_BLUE ECS(0, 0, 15)
+#define oLIGHT_GREEN ECS(0, 15, 0)
+#define oCYAN        ECS(0, 15, 15)
+#define oRED ECS(15, 0, 0)
+#define oMAGENTA   ECS(15, 0, 15)
+#define oYELLOW   ECS(0, 15, 15)
+#define oWHITE   ECS(15, 15, 15)
+
+float random( float2 p ) {
+    return frac(
+        sin(float2(dot(p,float2(127.1,311.7)),
+        dot(p,float2(269.5,183.3))))*43758.5453).x;
+}
+
+float3 add(float3 a, float3 b)
+{
+    return min(a + b, 1.0);
+}
+
+#define KQ3_PALETTE_M \
+    static const float3 KQ3_PALETTE[16] = {\
+        eBLACK,                    \
+        eDARK_BLUE,                \
+        eDARK_GREEN,               \
+        eDARK_CYAN,                \
+        eDARK_RED,                 \
+        eDARK_MAGENTA,             \
+        eDARK_YELLOW,              \
+        eGRAY2,                    \
+        eGRAY1,                    \
+        eLIGHT_BLUE,               \
+        eLIGHT_GREEN,              \
+        eCYAN,                     \
+        ePINK,                     \
+        eMAGENTA,                  \
+        eYELLOW,                   \
+        eWHITE                     \
+    };
+
+#define KQ3_ORIGINAL_PALETTE_M \
+    static const float3 KQ3_PALETTE[16] = {\
+        oBLACK, \
+        oDARK_BLUE, \
+        oDARK_GREEN, \
+        oDARK_CYAN, \
+        oDARK_RED, \
+        oDARK_MAGENTA, \
+        oDARK_YELLOW, \
+        oGRAY2, \
+        oGRAY1, \
+        oLIGHT_BLUE, \
+        oLIGHT_GREEN, \
+        oCYAN, \
+        oRED, \
+        oMAGENTA, \
+        oYELLOW, \
+        oWHITE\
+    };
+
+#define KQ3_NOISE_M \
+    static const float KQ3_NOISE_MOD[16] = {\
+        0.10, \
+        0.25, \
+        0.25, \
+        0.25, \
+        0.25, \
+        0.25, \
+        0.25, \
+        0.35, \
+        0.35, \
+        0.25, \
+        0.25, \
+        0.25, \
+        0.25, \
+        0.25, \
+        0.25, \
+        0.45, \
+    };
+
+#define KQ3_PATTERN_M \
+    static const float2 KQ3_PATTERN[16] = {\
+        float2(0, 0),\
+        27.10 * float2(0.90407,	0.23521) * KQ3_ASPECT,\
+        9.90 *  float2(0.70086,	0.75501) * KQ3_ASPECT,\
+        42.40 * float2(0.25814,	0.78293) * KQ3_ASPECT,\
+        14.00 * float2(0.74810,	0.69319) * KQ3_ASPECT,\
+        10.30 * float2(0.49313,	0.08713) * KQ3_ASPECT,\
+        36.70 * float2(0.17253,	0.86036) * KQ3_ASPECT,\
+        0.2 *  float2(0.1159,	0.13297) * KQ3_ASPECT,\
+        0.80 * float2(0.14551, 0.15997) * KQ3_ASPECT, \
+        41.10 * float2(0.03477,	0.30586) * KQ3_ASPECT,\
+        35.70 * float2(0.58729,	0.71281) * KQ3_ASPECT,\
+        18.80 * float2(0.08919,	0.94726) * KQ3_ASPECT,\
+        30.50 * float2(0.77559,	0.65253) * KQ3_ASPECT,\
+        10.10 * float2(0.03167,	0.57066) * KQ3_ASPECT,\
+        11.50 * float2(0.97097,	0.27718) * KQ3_ASPECT,\
+        float2(0,0) \
+    };
+
+float4 PS_AACC_KQ3_Original(VertFragData vtx) : TARGET {
+
+    KQ3_ORIGINAL_PALETTE_M;
+
+	float3 v = InputA.Sample(def_sampler, vtx.uv);
+    int colourIndex = (int) (v.z * 15.0);
+    float3 colour = KQ3_PALETTE[colourIndex];
+
+    return float4(colour, 1);
+}
+
+
+float4 PS_AACC_KQ3(VertFragData vtx) : TARGET {
+
+    KQ3_PALETTE_M;
+
+	float3 v = InputA.Sample(def_sampler, vtx.uv);
+    int colourIndex = (int) (v.z * 15.0);
+    float3 colour = KQ3_PALETTE[colourIndex];
+
+    return float4(colour, 1);
+}
+
+
+float4 PS_AACC_KQ3_Noise(VertFragData vtx) : TARGET {
+
+    KQ3_PALETTE_M;
+    KQ3_NOISE_M;
+
+	float3 v = InputA.Sample(def_sampler, vtx.uv);
+    int colourIndex = (int) (v.z * 15.0);
+    float3 colour = KQ3_PALETTE[colourIndex];
+
+    float2 pos = vtx.uv * KQ3_ASPECT;
+    float noise1 = random(pos) * KQ3_NOISE_MOD[colourIndex] * noise_mod;
+    float3 noise = float3(noise1, noise1, noise1);
+    
+    return float4(add(colour, noise), 1);
+}
+
+float4 PS_AACC_KQ3_Noise_Pattern(VertFragData vtx) : TARGET {
+
+    KQ3_PALETTE_M;
+    KQ3_NOISE_M;
+    KQ3_PATTERN_M;
+
+	float3 v = InputA.Sample(def_sampler, vtx.uv);
+    int colourIndex = (int) (v.z * 15.0);
+    float3 colour = KQ3_PALETTE[colourIndex];
+    float3 tintColour = colour * (tint / 255.0f);
+
+    float2 pos = vtx.uv * KQ3_ASPECT;
+    float noise1 = random(pos) * KQ3_NOISE_MOD[colourIndex] * noise_mod;
+    float3 noise = float3(noise1, noise1, noise1);
+    float2 pattern_xy = frac(pos * KQ3_PATTERN[colourIndex] * pattern_scale);
+    float pattern = frac(pattern_xy.x + pattern_xy.y);
+    
+
+    if (pattern < 0.5)
+	    return float4(add(colour, noise), 1);
+    else
+	    return float4(add(tintColour, noise), 1);
+}
+
+
+float4 PS_AACC_KQ3_Pattern(VertFragData vtx) : TARGET {
+
+    KQ3_PALETTE_M;
+    KQ3_NOISE_M;
+    KQ3_PATTERN_M;
+
+	float3 v = InputA.Sample(def_sampler, vtx.uv);
+    int colourIndex = (int) (v.z * 15.0);
+    float3 colour = KQ3_PALETTE[colourIndex];
+    float3 tintColour = colour * (tint / 255.0f);
+
+    float2 pos = vtx.uv * KQ3_ASPECT;
+    float2 pattern_xy = frac(pos * KQ3_PATTERN[colourIndex] * pattern_scale);
+    float pattern = frac(pattern_xy.x + pattern_xy.y);
+    
+
+    if (pattern < 0.5)
+	    return float4(colour, 1);
+    else
+	    return float4(tintColour, 1);
+}
+
+technique AACC_KingsQuest3
+{
+	pass
+	{
+		vertex_shader = VSDefault(vtx);
+		pixel_shader  = PS_AACC_KQ3(vtx); 
+	}
+}
+
+technique AACC_KingsQuest3_Original
+{
+	pass
+	{
+		vertex_shader = VSDefault(vtx);
+		pixel_shader  = PS_AACC_KQ3_Original(vtx); 
+	}
+}
+
+
+technique AACC_KingsQuest3_Noise
+{
+	pass
+	{
+		vertex_shader = VSDefault(vtx);
+		pixel_shader  = PS_AACC_KQ3_Noise(vtx); 
+	}
+}
+
+
+technique AACC_KingsQuest3_Noise_Pattern
+{
+	pass
+	{
+		vertex_shader = VSDefault(vtx);
+		pixel_shader  = PS_AACC_KQ3_Noise_Pattern(vtx); 
+	}
+}
+
+
+
+technique AACC_KingsQuest3_Pattern
+{
+	pass
+	{
+		vertex_shader = VSDefault(vtx);
+		pixel_shader  = PS_AACC_KQ3_Pattern(vtx); 
+	}
+}
